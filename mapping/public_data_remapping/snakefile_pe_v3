@@ -1,0 +1,232 @@
+import pandas as pd
+import os
+
+configfile: "config/config.yaml" # 
+os.environ['TMPDIR'] = "/mnt/md1/varshini/Blood/chip_remapping_all"
+
+sample_map_df = pd.read_csv(
+    config["samples"], 
+    sep="\t", 
+    header=0, 
+    names=["srr_id", "sample_name", "sample", "exp_id", "layout"] 
+)
+
+name_to_srr = sample_map_df.set_index('sample_name')['srr_id'].to_dict() 
+sample_to_reps = sample_map_df.groupby('sample')['sample_name'].apply(list).to_dict() 
+# Dictionary to fetch SE or PE layout
+name_to_layout = sample_map_df.set_index('sample_name')['layout'].to_dict()
+
+all_target_names = [name for name in name_to_srr.keys() if "Input" not in name] 
+replicated_target_samples = [
+    samp for samp, reps in sample_to_reps.items() 
+    if len(reps) > 1 and "Input" not in samp
+] # 
+
+wildcard_constraints:
+    sample_name="[a-zA-Z0-9_]+",
+    sample="[a-zA-Z0-9_]+",
+    peak_type="broad|narrow"  
+
+def get_peak_type(name):
+    return "broad" if "H3K4me1" in name else "narrow"  
+
+def get_lenient_peaks(wildcards):
+    reps = sample_to_reps[wildcards.sample] 
+    return expand(
+        f"{config['basedir']}/peaks/lenient2/{{rep}}_peaks.sorted.{wildcards.peak_type}Peak", 
+        rep=reps
+    )
+
+def get_sample_files(wildcards):
+    reps = sample_to_reps[wildcards.sample] 
+    return expand(
+        f"{config['basedir']}/bam/{{rep}}.rmdup.bam", 
+        rep=reps
+    )
+
+def get_matched_control(wildcards):
+    """
+    Dynamically finds the matched Input BAM. 
+    Changes 'NCO18_d10jf_CTCF' -> 'NCO18_d10jf_Input' 
+    """
+    base_name = wildcards.sample_name.rsplit('_', 1)[0] 
+    control_name = f"{base_name}_Input" # [cite: 3]
+    return f"{config['basedir']}/bam/{control_name}.rmdup.bam" 
+
+# 2. Input helper to dynamically feed FASTQ reads based on layout
+def get_fastq_reads(wildcards):
+    """Fetch 1 file for SE or 2 files for PE."""
+    layout = name_to_layout[wildcards.sample_name]
+    if layout == "PE":
+        return [f"{config['basedir']}/fastq/{wildcards.sample_name}_1.fastq",
+                f"{config['basedir']}/fastq/{wildcards.sample_name}_2.fastq"]
+    else:
+        return [f"{config['basedir']}/fastq/{wildcards.sample_name}.fastq"]
+
+ruleorder: prepare_srr_pe > prepare_srr_se
+
+rule all:
+    input:
+        [f"{config['basedir']}/peaks/stringent/{name}_{get_peak_type(name)}.log" for name in all_target_names], 
+        [f"{config['basedir']}/peaks/lenient2/{name}_peaks.sorted.{get_peak_type(name)}Peak" for name in all_target_names],
+        [f"{config['basedir']}/bigwig/{samp}.bw" for samp in sample_map_df["sample"]] 
+
+# 3. Split the SRA Rule
+rule prepare_srr_pe:
+    output:
+        fq1=f"{config['basedir']}/fastq/{{sample_name}}_1.fastq",
+        fq2=f"{config['basedir']}/fastq/{{sample_name}}_2.fastq"
+    params:
+        srr_id = lambda wildcards: name_to_srr[wildcards.sample_name], 
+        odir=f"{config['basedir']}/fastq/"
+    resources:
+        pe_dump=1,
+        mem_mb=2000 
+    conda:
+        config["sra_env"] 
+    shell:
+        "prefetch {params.srr_id} && "
+        "fasterq-dump --split-3 {params.srr_id} -O {params.odir} &&"
+        "mv {params.odir}{params.srr_id}_1.fastq {output.fq1} &&" 
+        "mv {params.odir}{params.srr_id}_2.fastq {output.fq2}"
+
+rule prepare_srr_se:
+    output:
+        fq=f"{config['basedir']}/fastq/{{sample_name}}.fastq"
+    params:
+        srr_id = lambda wildcards: name_to_srr[wildcards.sample_name],
+        odir=f"{config['basedir']}/fastq/"
+    resources:
+        se_dump=1,
+        mem_mb=2000 
+    conda:
+        config["sra_env"]
+    shell:
+        "prefetch {params.srr_id} && "
+        "fasterq-dump --split-3 {params.srr_id} -O {params.odir} &&"
+        "mv {params.odir}{params.srr_id}.fastq {output.fq}"
+
+def get_bowtie2_args(wildcards, input):
+    """Dynamically builds the Bowtie2 input arguments based on layout."""
+    layout = name_to_layout[wildcards.sample_name]
+    if layout == "PE":
+        return f"--no-mixed --no-discordant -1 {input[0]} -2 {input[1]}"
+    else:
+        return f"-U {input[0]}"
+
+rule align:
+    input:
+        get_fastq_reads
+    output:
+        alignbam = f"{config['basedir']}/bam/{{sample_name}}.bam"
+    conda:
+        config["seq_env"]
+    resources:
+        align_job=1
+    threads: 12
+    params:
+        genome = config["genome"],
+        # Call the helper function here
+        fq_args = get_bowtie2_args
+    shell:
+        """
+        bowtie2 -p {threads} {params.fq_args} -x {params.genome} | \
+        grep -v XS: - | samtools view -bh -F4 - > {output.alignbam}
+        """
+
+rule sambamba_sort:
+    input:
+        alignbam=f"{config['basedir']}/bam/{{sample_name}}.bam" 
+    output:
+        sortbam=f"{config['basedir']}/bam/{{sample_name}}.sorted.bam" 
+    conda:
+        config["seq_env"] 
+    resources:
+        sort_job=1 # [cite: 7]
+    params:
+        sortmem=config["mem_per_sort"] 
+    threads: 12 # [cite: 7]
+    shell:
+        "sambamba sort -t {threads} -m {params.sortmem} -o {output.sortbam} {input.alignbam}" 
+
+rule sambamba_markdup:
+    input:
+        sortbam=f"{config['basedir']}/bam/{{sample_name}}.sorted.bam" 
+    output:
+        dedup=f"{config['basedir']}/bam/{{sample_name}}.rmdup.bam" 
+    conda:
+        config["seq_env"]
+    threads: 8 # [cite: 8]
+    shell:
+        "sambamba markdup -r -t {threads} {input.sortbam} {output.dedup} &&" 
+        "sambamba index {output.dedup}" 
+
+# 5. MACS2 Dynamic Flags
+rule macs2_stringent:
+    input:
+        treat = f"{config['basedir']}/bam/{{sample_name}}.rmdup.bam", 
+        control = get_matched_control 
+    output:
+        stringent_log=f"{config['basedir']}/peaks/stringent/{{sample_name}}_{{peak_type}}.log" 
+    conda:
+        config["peaks_env"]
+    params:
+        broad_flag = lambda wildcards: "--broad" if wildcards.peak_type == "broad" else "", 
+        format_flag = lambda wildcards: "BAMPE" if name_to_layout[wildcards.sample_name] == "PE" else "BAM",
+        tempdir = config["tempdir"],
+        stringent_peaks=f"{config['basedir']}/peaks/stringent/{{sample_name}}_{{peak_type}}"
+    shell:
+        "macs2 callpeak -t {input.treat} -c {input.control} {params.broad_flag} "
+        "-f {params.format_flag} -g hs -n {params.stringent_peaks} --keep-dup all --tempdir {params.tempdir} > {output.stringent_log}" 
+
+rule macs2_lenient:
+    input:
+        treat = f"{config['basedir']}/bam/{{sample_name}}.rmdup.bam", 
+        control = get_matched_control 
+    output:
+        lenient_log=f"{config['basedir']}/peaks/lenient2/{{sample_name}}_{{peak_type}}.log", 
+        lenient_sorted=f"{config['basedir']}/peaks/lenient2/{{sample_name}}_peaks.sorted.{{peak_type}}Peak" 
+    conda:
+        config["peaks_env"]
+    params:
+        broad_flag = lambda wildcards: "--broad" if wildcards.peak_type == "broad" else "", 
+        peak_ext =  lambda wildcards: "broadPeak" if wildcards.peak_type == "broad" else "narrowPeak", 
+        format_flag = lambda wildcards: "BAMPE" if name_to_layout[wildcards.sample_name] == "PE" else "BAM",
+        tempdir = config["tempdir"],
+        lenient_peaks=f"{config['basedir']}/peaks/lenient2/{{sample_name}}_{{peak_type}}", 
+    shell:
+        "macs2 callpeak -t {input.treat} -c {input.control} -f {params.format_flag} -g hs {params.broad_flag} "
+        "-n {params.lenient_peaks} -p 1e-2 > {output.lenient_log} --keep-dup all --tempdir {params.tempdir} && " #
+        "sort -k8,8nr {params.lenient_peaks}_peaks.{params.peak_ext} > {output.lenient_sorted}" 
+
+rule peaks_idr:
+    input:
+        peaks_in=get_lenient_peaks 
+    output:
+        idr_peaks=f"{config['basedir']}/peaks/idr/{{sample}}_idr.{{peak_type}}Peak", 
+        idr_log=f"{config['basedir']}/peaks/idr/{{sample}}_idr.{{peak_type}}Peak.log" 
+    params:
+        peak = lambda wildcards: "broadPeak" if wildcards.peak_type == "broad" else "narrowPeak" 
+    conda:
+        config["idr_env"]
+    shell:
+        "idr --samples {input.peaks_in} "
+        "--input-file-type {params.peak} " 
+        "--rank p.value " # [cite: 12]
+        "--output-file {output.idr_peaks} " 
+        "--log-output-file {output.idr_log}" 
+
+rule make_bigwig:
+     input:
+        bam_files=get_sample_files
+     output:
+        mergebam=f"{config['basedir']}/bigwig/{{sample}}_merged.bam",
+        bw=f"{config['basedir']}/bigwig/{{sample}}.bw" 
+     threads: 8 
+     conda:
+        config["seq_env"]
+     shell:
+        "samtools merge {output.mergebam} {input.bam_files} && "
+        "sambamba index {output.mergebam} &&"
+        "bamCoverage -b {output.mergebam} -o {output.bw} --outFileFormat bigwig " 
+        "-p {threads} " 
