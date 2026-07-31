@@ -131,16 +131,6 @@ def collapse_anchors(anchors, pad):
     return new_anchors
 
 def define_elements(peak, anchors):
-    """
-    Assigns 'LEFT', 'RIGHT', or 'NONE' to each anchor relative to the peak coordinate.
-
-    Parameters:
-    - peak: row from `peaks` with a 'coord' value
-    - anchors: pandas Series or DataFrame column of anchor coordinates
-
-    Returns:
-    - Series of strings: 'LEFT', 'RIGHT', or 'NONE'
-    """
     peak_coord = peak['coord']
     labels = anchors.astype('object').copy()
 
@@ -151,18 +141,6 @@ def define_elements(peak, anchors):
     return labels
 
 def define_loops(peak, anchor1, anchor2, loops):
-    """
-    Classify loops as 'same-side', 'crosser', or 'NONE' based on anchor positions relative to peak.
-
-    Parameters:
-    - peak: row from `peaks` DataFrame
-    - anchor1: Series of 'coord1' from loops
-    - anchor2: Series of 'coord2' from loops
-    - loops: full loops DataFrame (will be returned with added classification)
-
-    Returns:
-    - loops DataFrame with new columns: 'loc1', 'loc2', 'loop_type'
-    """
     loc1 = define_elements(peak, anchor1)
     loc2 = define_elements(peak, anchor2)
 
@@ -451,11 +429,7 @@ def loop_scores_snip(clr, PS_df, peaks, loops, dist, quantsize=5000, verbose=Fal
     return peak_scores_df
 
 """
-Need more info and exploration about how matchmaking changes during differentiation
-dP(s)/ds peak changes from 66 to 102 kb from P1 to P3. Does the range or extension of the matchmaking stripe increase accordingly? 
-Can you quantify the “extension” of the orthogonal stripe. 
-E.g. centering on the matchmaking anchor, draw an orthogonal line and then calculate the Micro-C O/E intensity vs. 
-orthogonal distance from the diagonal for P1, P2, P3. How well does that match the P(S) increases?
+makes the diagonal extension plots
 """
 ## TODO: i do this first snippet a bunch of times, can i make it all one main fn. that routes to diff. tasks
 def intensity_by_distance(clr, PS_df, peaks, dist, plotting=False):
