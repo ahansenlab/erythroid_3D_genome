@@ -212,7 +212,7 @@ rule peaks_idr:
     shell:
         "idr --samples {input.peaks_in} "
         "--input-file-type {params.peak} " 
-        "--rank p.value " # [cite: 12]
+        "--rank p.value "
         "--output-file {output.idr_peaks} " 
         "--log-output-file {output.idr_log}" 
 
