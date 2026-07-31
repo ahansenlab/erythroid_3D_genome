@@ -1,0 +1,121 @@
+```{r}
+
+library("biomaRt")
+library(tidyverse)
+library("R.utils")
+library("DESeq2")
+library(dplyr)
+library("pheatmap")
+```
+
+```{r}
+# make a table with the genes, transcripts, position on the genome, and FPKM
+# retain strand information? or TSS and TTS can account for this 
+
+DATAPATH <- '/Users/varshiniramanathan/Documents/HansenLab/blood_data'
+# connect to Ensembl
+ensembl <- useEnsembl("ensembl", dataset = "hsapiens_gene_ensembl")
+
+# load and prep your count data
+counts_df <- data.frame(read_tsv(file.path(DATAPATH, "ct_rna_hbf.tsv")))
+values <- sub("\\.\\d+$", "", counts_df$gene)  # strip version suffix
+rownames(counts_df) <- values
+# optional cleanup if these columns exist
+counts_df$gene <- NULL
+counts_df$...13 <- NULL
+
+# get attributes
+ref <- getBM(
+  attributes = c(
+    "external_gene_name",
+    "refseq_mrna",
+    "ensembl_gene_id",
+    "gene_biotype",
+    "chromosome_name",
+    "transcript_start",
+    "transcript_end",
+    "transcript_length",
+    "strand"
+  ),
+  filters = "ensembl_gene_id",
+  values = values,
+  mart = ensembl
+)
+
+# Extract numeric part of refseq_mrna (if present)
+ref$txnum <- sapply(strsplit(ref$refseq_mrna, "_"), `[`, 2)
+
+# For each gene, keep the entry with the lowest-numbered RefSeq
+tbl <- ref %>%
+  group_by(ensembl_gene_id) %>%
+  slice_min(as.numeric(txnum), n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+# Deduplicate and tidy
+uniqueattributes <- as.data.frame(tbl)
+uniqueattributes <- uniqueattributes[!duplicated(uniqueattributes$ensembl_gene_id), ]
+uniqueattributes$txnum <- NULL
+rownames(uniqueattributes) <- uniqueattributes$ensembl_gene_id
+uniqueattributes$ensembl_gene_id <- NULL
+
+```
+
+```{r}
+#  remove elements from counts_df that have rownames not in uniqueattributes (not found in ensembl)
+counts_df <- counts_df[rownames(counts_df) %in% rownames(uniqueattributes), ] 
+counts_df <- counts_df[rownames(uniqueattributes), , drop=FALSE]
+
+# get tpm from this according to michael love snippet:
+# x <- counts.mat / gene.length
+# tpm.mat <- t( t(x) * 1e6 / colSums(x) )
+gene.length <- uniqueattributes[rownames(counts_df), "transcript_length"]
+
+# ensure numeric and in kilobases
+gene.length <- as.numeric(gene.length) / 1000  
+gene.length[gene.length == 0 | is.na(gene.length)] <- NA
+x <- as.matrix(counts_df) / gene.length
+tpm_mat <- t(t(x) * 1e6 / colSums(x, na.rm=TRUE)) 
+tpm_annotated<-merge(tpm_mat, uniqueattributes, by=0)
+
+```
+
+```{r}
+
+phase_design<-c("P1","P2","P2",
+                "P3","P3","P1",
+                "P1","P2","P2",
+                "P3","P3")
+
+reps<-c(1, 1, 2, 1, 2, 1, 1, 1, 2, 1, 2)
+
+samples<-c("D1_P123_Rep1_RNA","D1_P345_Rep1_RNA","D1_P345_Rep2_RNA",
+           "D1_P5678_Rep1_RNA","D1_P5678_Rep2_RNA","D2_P123_Rep2_RNA",
+           "D3_P123_Rep3_RNA","D3_P345_Rep3_RNA",	"D3_P345_Rep4_RNA",
+           "D3_P5678_Rep3_RNA","D3_P5678_Rep4_RNA")
+coldata <- data.frame(sample = samples, 
+                      phase = phase_design,
+                      replicate=reps)
+coldata$phase_replicate <- paste0(coldata$phase, "_Rep", coldata$replicate)
+
+rownames(coldata) <- coldata$sample
+coldata$sample <- NULL
+
+tpm_cols <- colnames(tpm_mat)
+
+tpm_avg <- sapply(unique(coldata$phase), function(pr) {
+  cols <- rownames(coldata)[coldata$phase == pr]
+  rowMeans(tpm_mat[, cols, drop = FALSE], na.rm = TRUE)
+})
+
+tpm_avg_annotated<-merge(tpm_avg,uniqueattributes, by=0)
+colnames(tpm_avg_annotated)[colnames(tpm_avg_annotated) == "Row.names"] <- "ensembl_id"
+
+# write to TSV
+write.table(
+  tpm_avg_annotated,
+  file = file.path(DATAPATH, "tpm_avg_annotated.tsv"),
+  sep = "\t",
+  quote = FALSE,
+  row.names = FALSE
+)
+```
