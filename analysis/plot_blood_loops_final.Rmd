@@ -1,0 +1,172 @@
+```{r}
+library(InteractionSet)
+library(Biostrings)
+library(BSgenome.Hsapiens.UCSC.hg38)
+library(tidyverse)
+library("R.utils")
+library(GenomicInteractions)
+library(dplyr)
+
+library(GenomicRanges)
+library(GenomicFeatures)
+library(rtracklayer)
+library(plyranges)
+
+library(RColorBrewer)
+library(khroma)
+
+library(tidyr)
+library(ggplot2)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+
+DATAPATH='~/Documents/HansenLab/blood_data/remapped'
+LOOP_CLASSES='merged_calls_125kb_q0.01_classes_new.txt'
+
+loop_classes=read_tsv(file.path(DATAPATH, LOOP_CLASSES))
+
+grp<-table(loop_classes$pair)
+#grp<-loop_classes %>% count(pair)
+grp['E/P-Other']<-(grp['E-Null']+grp['P-Null'])
+grp['E/P-CTCF']<-(grp['E-CTCF']+grp['P-CTCF'])
+
+drops <- c('E-Null', 'E-CTCF', 'P-Null', 'P-CTCF')
+grp<-grp[!(names(grp) %in% drops)]
+vibrant <- color("vibrant")
+vibrant_values=c('E-P'='#0077BB',
+                'CTCF-CTCF'='#CC3311',
+                'E-E'='#009988',
+                'P-P'='#33BBEE',
+                'E/P-CTCF'='#EE3377',
+                'E/P-Other'='#0033BB',
+                'CTCF-Null'='#EE7733',
+                'Null-Null'='#BBBBBB')
+# make figure size bigger
+# make it square?
+# make it a stacked bar?
+# names outside
+out = pie(grp, col = adjustcolor(vibrant_values[names(grp)],  alpha.f = 0.8), labels = names(grp))
+
+# midpoints again
+angles <- cumsum(grp) - grp/2
+angles <- angles / sum(grp) * 2 * pi
+
+# counts inside
+text(
+  x = 0.6 * cos(angles),
+  y = 0.6 * sin(angles),
+  labels = grp
+)
+
+ggsave(file.path("~/Documents/HansenLab/Papers/Blood/figures_2026/v1/svg/fig1/loop_classes_pie.svg"), width=6, height=4)
+
+```
+
+
+```{r}
+vibrant <- color("vibrant")
+vibrant_values=c('E-P'='#0077BB',
+                'CTCF-CTCF'='#EE7733',
+                'E-E'='#009988',
+                'P-P'='#0033BB',
+                'E/P-CTCF'='#EE3377',
+                'E/P-Null'='#33BBEE',
+                'CTCF-Null'='#CC3311',
+                'Null-Null'='#BBBBBB')
+
+loopnames<-c(
+  "032524_combined_DAP_JAN_028_ATAC_v1_both_classes.txt", 
+  "erythroid_associated_ACRs_v1_both_classes.txt",
+  "acrs_unique_v1_both_classes.txt",
+  "erythroid_tf_acrs_unique_v1_both_classes.txt")
+
+
+all_grps<-list()
+for (lc in loopnames){
+  loop_classes=read_tsv(file.path(DATAPATH, lc))
+  grp<-table(loop_classes$pair)
+  bn<-strsplit(lc, '.', fixed=TRUE)[[1]][1]
+  
+  print(lc)
+  print(grp)
+  
+  grp['E/P-Null']<-(grp['E-Null']+grp['P-Null'])
+  grp['E/P-CTCF']<-(grp['E-CTCF']+grp['P-CTCF'])
+
+  drops <- c('E-Null', 'E-CTCF', 'P-Null', 'P-CTCF')
+  grp<-grp[!(names(grp) %in% drops)]
+
+  pie(grp)
+  all_grps[[bn]] <- grp
+  
+}
+
+summary_table <- as.data.frame.matrix(
+  do.call(cbind, lapply(all_grps, function(g) {
+    # Ensure all vectors have same names (fill in missing with 0)
+    all_names <- unique(unlist(lapply(all_grps, names)))
+    g[setdiff(all_names, names(g))] <- 0
+    g[all_names]
+  }))
+)
+summary_table$class <- rownames(summary_table)
+
+
+desired_class_order <- c("E-E",
+                         "E-P",
+                         "P-P", 
+                         "E/P-Null",
+                         "E/P-CTCF",
+                         "CTCF-CTCF",
+                         "CTCF-Null",
+                         "Null-Null")
+
+for (lc in loopnames){
+  loop_classes=read_tsv(file.path(DATAPATH, lc))
+  grp<-table(loop_classes$pair)
+  long_df <- pivot_longer(summary_table, 
+                        cols = -class, 
+                        names_to = "sample", 
+                        values_to = "count")
+  
+  
+    grp['E/P-Null']<-(grp['E-Null']+grp['P-Null'])
+    grp['E/P-CTCF']<-(grp['E-CTCF']+grp['P-CTCF'])
+  
+    drops <- c('E-Null', 'E-CTCF', 'P-Null', 'P-CTCF')
+    grp<-grp[!(names(grp) %in% drops)]
+    all_grps[[bn]] <- grp
+    
+  }
+
+long_df$sample <- factor(long_df$sample, levels = c(
+  "032524_combined_DAP_JAN_028_ATAC_v1_both_classes", 
+  "erythroid_associated_ACRs_v1_both_classes",
+  "acrs_unique_v1_both_classes",
+  "erythroid_tf_acrs_unique_v1_both_classes"))
+
+
+long_df$class <- factor(long_df$class, levels = desired_class_order)
+
+ggplot(long_df, aes(x = sample, y = count, fill = class)) +
+  geom_bar(stat = "identity", position="fill", color = "black")  + 
+  scale_y_continuous(expand = c(0, 0)) + 
+  scale_fill_manual(values=vibrant_values) + theme_bw() + theme_classic() +
+  theme(axis.title.y=element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        #panel.border = element_blank(),
+
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank()) 
+#ggsave(file.path(DATAPATH, "loop_classes_bar_both.svg"), width=6, height=4)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
