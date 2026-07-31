@@ -501,7 +501,7 @@ class simulationBondUpdater(object):
 
 
 def generate_param_grid(param_dict):
-    """Yields a dictionary for each combination in the sweep space."""
+    """Yields a dictionary for each combination in the sweep."""
     keys, values = zip(*param_dict.items())
     for bundle in product(*values):
         yield dict(zip(keys, bundle))

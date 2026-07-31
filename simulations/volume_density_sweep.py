@@ -499,7 +499,7 @@ class simulationBondUpdater(object):
 
 
 def generate_param_grid(param_dict):
-    """Yields a dictionary for each combination in the sweep space."""
+    """Yields a dictionary for each combination in the sweep."""
     keys, values = zip(*param_dict.items())
     for bundle in product(*values):
         yield dict(zip(keys, bundle))
@@ -557,7 +557,8 @@ def build_tiled_mm(mm_configs, chrom_size, region_size, loading_bias, loading_wi
     return mmLoc # this fulfills the need for birthArray
 
 def build_tiled_mm_permm(mm_configs, chrom_size, region_size, cohesins_per_mm, loading_width):
-    """Tiles the targeted loading elements across the chromosome."""
+    """Tiles the targeted loading elements across the chromosome, but now have fixed "number SMCs" perer
+    " matchmaker (this is an arbitrary quantity, but just keeps comparisons slightly straightforward """
     num_regions = chrom_size // region_size
     mmLoc = np.ones(chrom_size, dtype=np.double)
 
@@ -686,8 +687,6 @@ simulation_sweep_space = {
     'dsb_boost_factor': [0],
     'llp': [2],
     'h': [0.4],
-    #'loading_b': [2, 4, 8, 16],  # targeted loading bias
-    #'loading_width': [4, 8, 16, 32] # width of targeted loading in kb,
     'loading_width': [16], # width of targeted loading in kb,
     'cohesins_per_mm':[64], # if none, that means no bias
     'volume_density':[0.45, 0.15, 0.60]
@@ -703,10 +702,9 @@ if __name__ == '__main__':
     positions_to_sample = np.arange(chrom_size)
     block_to_save_all = []
 
-    # Iterate through the cleanly generated parameter grid
+    # iterate thru parameter grid
     for config in generate_param_grid(simulation_sweep_space):
 
-        # Build the dynamic directory name based on current sweep parameters
         run_name = (f"sim_proc{config['processivity']}_sep{config['separations']}"
                     f"_ctcf{config['ctcf_boost_factor']}_n{config['cohesins_per_mm']}"
                     f"_h{config['h']}_llp{config['llp']}_w{config['loading_width']}"
