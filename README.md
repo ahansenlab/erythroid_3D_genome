@@ -7,3 +7,4 @@ Code for performing analyses and simulations for the publication "Cohesin loadin
 3. simulations/ contains polymer simulation code to model the effect of preferential cohesin loading and chromatin compaction, and some processing code to make maps and loop strength quantifications from simulated polymers.
 4. figure_generation/ contains Jupyter notebooks split by main figure and associated supplementary figures. Each notebook yields at least one of the figures used in the manuscript exactly, barring aesthetic modifications.
 
+Please see the indicated subfolders for further documentation of each of these specific portions. Each folder also contains the necessary environment(s); note that environments cannot be shared between each of these. For example, the mapping environment is incompatible with the simulation code. 
