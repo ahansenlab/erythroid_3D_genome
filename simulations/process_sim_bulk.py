@@ -155,7 +155,6 @@ def jackknife_cm(block_stack, loops, w=5):
     grand_sum_cm = np.sum(block_stack, axis=2)
 
     # Dictionary to hold the LOO metrics for each loop
-    # Structure: { loop_idx: {'obs': [], 'exp': [], 'oe': []} }
     loo_data = {i: {'obs': [], 'exp': [], 'oe': []} for i in range(len(loops))}
 
     # For k in block_num... drop k, get the average of the remaining contact maps
@@ -165,7 +164,6 @@ def jackknife_cm(block_stack, loops, w=5):
         loo_cm = (grand_sum_cm - block_stack[:, :, k]) / (n_blocks - 1)
 
         # 2. Get expected matrix (P(s) curve) for this specific LOO map
-        # Assuming get_Ps_curve_sim is available in your namespace
         x1, y1 = get_Ps_curve_sim(loo_cm)
         loo_ps_matrix = sp.linalg.toeplitz(y1)
 
@@ -217,7 +215,6 @@ def jackknife_cm_dummy(loops, w=5, n_blocks=2):
     loops.reset_index(inplace=True, drop=True)
 
     # Dictionary to hold the LOO metrics for each loop
-    # Structure: { loop_idx: {'obs': [], 'exp': [], 'oe': []} }
     loo_data = {i: {'obs': [], 'exp': [], 'oe': []} for i in range(len(loops))}
 
     # For k in block_num... drop k, get the average of the remaining contact maps
