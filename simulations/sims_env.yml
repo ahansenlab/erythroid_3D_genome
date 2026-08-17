@@ -1,0 +1,14 @@
+name: sims3D
+channels:
+ - conda-forge
+dependencies:
+ - python=3.8.18
+ - numpy=1.24.3
+ - openmm=8.0
+ - cython=3.0.5
+ - matplotlib=3.7
+ - h5py=3.10
+ - pandas=2.0.3
+ - pickleshare=0.7.5
+ - ipykernel
+ - scipy=1.9.1

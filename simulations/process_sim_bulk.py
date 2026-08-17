@@ -14,7 +14,6 @@ import time
 from multiprocessing import Pool
 import matplotlib.pyplot as plt
 
-
 ## below from james' able code (Jusuf et al., NSMB (2026))
 def get_cm(input_path, block_start, block_end, block_step, **kwargs):
 
@@ -36,15 +35,6 @@ def get_cm(input_path, block_start, block_end, block_step, **kwargs):
     start_time = time.time()
 
     if balance:
-        # print("Loading...")
-        # cm = monomerResolutionContactMap(filenames=files[block_start:block_end:block_step],
-        #                                          cutoff=cutoff, n=nproc)
-        # print("Balancing...")
-        # cm_balanced = sinkhorn_knopp(cm)
-        # print("Done balancing")
-        # cm_repeat = averageContacts(cm_balanced, range(num_regions), region_size)
-        # cm_rescaled = cm_repeat / num_blocks / num_regions
-        # # get all the region_size x region_size squares and sum across them
         cm = monomerResolutionContactMapSubchains(filenames=files[block_start:block_end:block_step],
                                                   mapStarts=region_starts, mapN=region_size, cutoff=cutoff, n=nproc)
 
@@ -52,6 +42,8 @@ def get_cm(input_path, block_start, block_end, block_step, **kwargs):
         print(f'done! ({int(end_time - start_time)} sec)')
 
         cm = cm / num_blocks / num_regions
+        # Out of concern that balancing on small-ish regions would have edge effects, add a pad with P(s) scaling
+        # (in reality, it barely affected the results)
         pad_width = region_size
         n_new = 2*pad_width + region_size
         print("Creating P(s) pad...")
@@ -59,7 +51,6 @@ def get_cm(input_path, block_start, block_end, block_step, **kwargs):
         y1_ext = np.concatenate([y1, np.full(n_new - len(y1), np.median(y1[-50:]))])
         cm_padded = sp.linalg.toeplitz(y1_ext)
 
-        #cm_padded = np.random.uniform(0, 0.0015, size=(pad_width * 2 + region_size, pad_width * 2 + region_size))
         cm_padded[pad_width:(pad_width+region_size), pad_width:(pad_width+region_size)] = cm
 
         plt.show()
@@ -80,11 +71,7 @@ def get_cm(input_path, block_start, block_end, block_step, **kwargs):
 
     return cm_rescaled
 
-
-
-# Example
-
-# implementation lifted from this blog post
+# Example implementation lifted from this blog post
 # https://fulkast.medium.com/the-sinkhorn-knopp-algorithm-without-proof-697c9af7df7
 # and then followed logic that element wise mult should work for the diagonal dots
 def sinkhorn_knopp(cm, n_iterations=25):
@@ -167,7 +154,7 @@ def jackknife_cm(block_stack, loops, w=5):
         x1, y1 = get_Ps_curve_sim(loo_cm)
         loo_ps_matrix = sp.linalg.toeplitz(y1)
 
-        # 3. Faster to do this loop-by-loop: extract the 9x9 patches
+        # 3. Faster to do this loop-by-loop: extract the patches specified by +/- w
         for i, loop_row in loops.iterrows():
 
             x_start, x_end = loop_row.left - w, loop_row.left + w
@@ -210,11 +197,10 @@ def jackknife_cm(block_stack, loops, w=5):
     loop_stats_df = pd.DataFrame(loop_stats_list)
     return loop_stats_df
 
-
+# Another dummy function to test inputs before running the whole computation
 def jackknife_cm_dummy(loops, w=5, n_blocks=2):
     loops.reset_index(inplace=True, drop=True)
 
-    # Dictionary to hold the LOO metrics for each loop
     loo_data = {i: {'obs': [], 'exp': [], 'oe': []} for i in range(len(loops))}
 
     # For k in block_num... drop k, get the average of the remaining contact maps
@@ -237,7 +223,6 @@ def jackknife_cm_dummy(loops, w=5, n_blocks=2):
         obs_arr = np.array(loo_data[i]['obs'])
         oe_arr = np.array(loo_data[i]['oe'])
 
-        # Calculate Grand Means
         mean_obs = np.mean(obs_arr)
         mean_oe = np.mean(oe_arr)
 
@@ -271,7 +256,7 @@ def add_loops_single_cm(cm_rescaled, loops,
     loops.reset_index(inplace=True, drop=True)
 
     loop_stats_list = []
-    # for each loop, make a (2w+1)kb x (2w+1)kb block centered on the dot
+    # for each loop, make a 2w kb x 2w kb block centered on the dot
     for i, loop_row in loops.iterrows():
         x_start, x_end = loop_row.left - w, loop_row.left + w
         y_start, y_end = loop_row.right - w, loop_row.right + w
@@ -293,10 +278,10 @@ def add_loops_single_cm(cm_rescaled, loops,
     loop_stats_df = pd.DataFrame(loop_stats_list)
     return loop_stats_df
 
+# Annotates the loops by type for easier sorting and analysis
+# Namely, convergent CTCF loops, EP loops, looping-adjacent loops, other loops
 def get_loop_df(**kwargs):
     # first, make the np array of the whole thing and save it
-
-
     CTCF_L = kwargs.get('CTCF_L')
     CTCF_R = kwargs.get('CTCF_R')
     EP = kwargs.get('EP')
@@ -308,6 +293,7 @@ def get_loop_df(**kwargs):
         pairs = [(rC, CTCF_L[i]) for i in range(ins_idx, len(CTCF_L))]
 
         conv_pairs.extend(pairs)
+
     # for rL in CTCF_L:
     #    ins_idx = np.searchsorted(CTCF_R, rL, side='left')
     #    pairs = [(CTCF_R[i-1], rL) for i in range(1, ins_idx+1)]

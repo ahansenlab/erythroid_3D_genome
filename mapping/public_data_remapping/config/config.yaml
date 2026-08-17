@@ -1,0 +1,31 @@
+# Path to a tsv file listing input samples and their corresponding information. Please see the example file in the GitHub repository for reference.
+samples: ./remapping_info.tsv
+
+# Output directory - must end with /
+basedir: /mnt/md1/varshini/Blood/chip_remapping_all
+
+# Path to genome fasta file
+genome: /mnt/md0/DataRepository/genomes/hg38_analysisSet/hg38.analysisSet.fa.gz
+
+# Name of genome assembly (e.g. mm39, mm10, hg19, etc.)
+assembly: hg38
+
+# Path to tab-delimited chromosome sizes file with chromosomes sorted by [what?] and containing only the major chromosomes and not other [whatever these are called], formatted as for [link to USCS Goldenpath file]
+chromsizes: /mnt/md0/DataRepository/hg38.sorted.chrom.sizes
+
+mem_per_sort: 20G
+
+seq_env:  /mnt/md0/varshini/conda_ymls/samtools.yml
+
+sra_env:  /mnt/md0/varshini/conda_ymls/sra_only_env.yml
+
+peaks_env: /mnt/md0/varshini/conda_ymls/macs2env.yml
+
+idr_env: /mnt/md0/varshini/conda_ymls/idr_env.yml
+
+tempdir: /mnt/md1/varshini/Blood/chip_remapping_all/
+# Number of threads to use
+threads: 8
+
+# Minimum MAPQ score to filter by. 30 is recommended.
+mapqmin: 30

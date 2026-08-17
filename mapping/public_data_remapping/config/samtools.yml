@@ -1,0 +1,54 @@
+name: samtools
+channels:
+  - r
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - _libgcc_mutex=0.1=conda_forge
+  - _openmp_mutex=4.5=2_gnu
+  - bowtie2=2.5.4=h7071971_4
+  - bwa-mem2=2.2.1=hd03093a_5
+  - bzip2=1.0.8=hd590300_5
+  - c-ares=1.28.1=hd590300_0
+  - ca-certificates=2026.2.25=hbd8a1cb_0
+  - hdf5=1.10.2=hba1933b_1
+  - htslib=1.20=h81da01d_0
+  - kallisto=0.44.0=h7d86c95_2
+  - keyutils=1.6.1=h166bdaf_0
+  - krb5=1.21.2=h659d440_0
+  - ld_impl_linux-64=2.44=h1423503_1
+  - libcurl=8.7.1=hca28451_0
+  - libdeflate=1.20=hd590300_0
+  - libedit=3.1.20191231=he28a2e2_2
+  - libev=4.33=hd590300_2
+  - libffi=3.4.4=h6a678d5_1
+  - libgcc-ng=13.2.0=h77fa898_6
+  - libgfortran-ng=7.5.0=h14aa051_20
+  - libgfortran4=7.5.0=h14aa051_20
+  - libgomp=13.2.0=h77fa898_6
+  - libnghttp2=1.58.0=h47da74e_1
+  - libnsl=2.0.1=hd590300_0
+  - libssh2=1.11.0=h0841786_0
+  - libstdcxx-ng=13.2.0=hc0a3c3a_6
+  - libxcrypt=4.4.36=hd590300_1
+  - libzlib=1.2.13=hd590300_5
+  - lz4-c=1.9.4=hcb278e6_0
+  - ncurses=6.4.20240210=h59595ed_0
+  - openssl=3.3.1=hb9d3cd8_3
+  - perl=5.32.1=7_hd590300_perl5
+  - pip=22.1.2=pyhd8ed1ab_0
+  - python=3.7.12=hf930737_100_cpython
+  - python_abi=3.7=4_cp37m
+  - readline=8.2=h8228510_1
+  - sambamba=1.0.1=h6f6fda4_2
+  - samtools=1.20=h50ea8bc_0
+  - setuptools=65.3.0=py37h89c1867_0
+  - sqlite=3.50.2=hb25bd0a_1
+  - subread=2.0.6=he4a0461_2
+  - tk=8.6.13=noxft_h4845f30_101
+  - wheel=0.41.3=pyhd8ed1ab_0
+  - xz=5.2.6=h166bdaf_0
+  - zlib=1.2.13=hd590300_5
+  - zstd=1.5.6=ha6fb4c9_0
+prefix: /home/varshini/anaconda3/envs/samtools
