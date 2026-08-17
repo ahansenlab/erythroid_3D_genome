@@ -14,7 +14,6 @@ library(ggalluvial)
 basedir='/Users/varshiniramanathan/Documents/HansenLab/blood_data/remapped'
 files <- list.files(basedir, pattern = "merged_calls.*\\.txt$", full.names = TRUE)
 
-# Read them all, keeping filename as dataset label
 df_all_loops <- files %>%
   set_names() %>%
   map_dfr(~ read.table(.x, header = TRUE, stringsAsFactors = FALSE) %>%
@@ -22,7 +21,6 @@ df_all_loops <- files %>%
             mutate(dataset = basename(.x)),
           .id = "source") %>% select(-annotation1,-annotation2)
 
-# If you want to track individual IDs across datasets:
 df_wide_loops <- df_all_loops %>% select(-source) %>%
   pivot_wider(names_from = dataset, values_from = pair) %>% select(starts_with("merged"))
 
@@ -36,57 +34,7 @@ ggplot(df_counts_loops,
   geom_label(stat = "stratum", aes(label = after_stat(stratum))) +
   scale_fill_brewer(type = "qual", palette = "Set3") +
   ggtitle("loop classes with differing enhancer annotation")
-```
 
-```{r}
-
-basedir='/Users/varshiniramanathan/Documents/HansenLab/adipose_data'
-files <- list.files(basedir, pattern = "adipose_classes_merged_anchors.*\\.txt$", full.names = TRUE)
-
-# Read them all, keeping filename as dataset label
-df_all <- files %>%
-  set_names() %>%
-  map_dfr(~ read.table(.x, header = TRUE, stringsAsFactors = FALSE) %>%
-            as_tibble() %>%
-            mutate(dataset = basename(.x)),
-          .id = "source") %>% select(-strand)
-
-# If you want to track individual IDs across datasets:
-df_wide <- df_all %>% select(-source) %>%
-  pivot_wider(names_from = dataset, values_from = annotation) %>% select(starts_with("adipose"))
-
-df_counts <- df_wide %>%
-  count(across(everything()))
-
-ggplot(df_counts,
-       aes(y = n, axis3 = adipose_classes_merged_anchors_0.10_v2.txt, axis2 = adipose_classes_merged_anchors_0.10.txt, axis1=adipose_classes_merged_anchors.txt)) +
-  geom_alluvium(aes(fill = adipose_classes_merged_anchors.txt), width = 1/12) +
-  geom_stratum(width = 1/12, fill = "black", color = "grey") +
-  geom_label(stat = "stratum", aes(label = after_stat(stratum))) +
-  scale_x_discrete(limits = c("original","thresh_0.10", "thresh_0.10_v2"), expand = c(.05, .05)) +
-  scale_fill_brewer(type = "qual", palette = "Set1") +
-  ggtitle("anchor classes with differing enhancer annotation")
-```
-
-```{r}
-df_counts <- df_all %>%
-  count(dataset, pair)
-# Now df_all looks like:
-# id   pair   dataset
-# 1    A      file1.txt
-# 2    B      file1.txt
-# 1    B      file2.txt
-# ...
-
-# If you want to track individual IDs across datasets:
-df_wide <- df_all %>%
-  pivot_wider(names_from = dataset, values_from = pair)
-
-# Step 3: back to long format, ordered by dataset
-df_long <- df_wide %>%
-  pivot_longer(cols = starts_with("adipose"),
-               names_to = "dataset",
-               values_to = "pair")
 ```
 
 ```
